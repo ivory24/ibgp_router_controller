@@ -6,7 +6,7 @@
 # REQUIRE: zebra
 ##
 
-PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/sbin:/usr/bin
 export PATH
 
 if [ -f /etc/rc.subr ]
@@ -17,7 +17,7 @@ fi
 name="ospf6d"
 rcvar=$name
 required_files="/etc/quagga/${name}.conf"
-command="/usr/local/sbin/${name}"
+command="/usr/sbin/${name}"
 command_args="-d"
 
 start_precmd="zebra_precmd"

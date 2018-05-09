@@ -1704,9 +1704,16 @@ bgp_process_queue_init (void)
 void
 bgp_process (struct bgp *bgp, struct bgp_node *rn, afi_t afi, safi_t safi)
 {
-  zlog_info("bgp_route.c file bgp_process func");
+
+  struct bgp_info *test_ri; 
+  for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+  {
+    zlog_info("bgp_route.c file bgp_process func: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+  }
+
+
   struct bgp_process_queue *pqnode;
-  
+
   /* already scheduled for processing? */
   if (CHECK_FLAG (rn->flags, BGP_NODE_PROCESS_SCHEDULED))
     return;
@@ -2136,12 +2143,22 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 
   memset (&new_attr, 0, sizeof(struct attr));
   memset (&new_extra, 0, sizeof(struct attr_extra));
+  
+  struct bgp_info *test_ri;
 
+
+  if (attr->aspath == NULL)
+    return;
   bgp = peer->bgp;
   rn = bgp_afi_node_get (bgp->rib[afi][safi], afi, safi, p, prd);
   
+  for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+  {
+      zlog_info("received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+  }
 
-  zlog_info("*****bgp_route.c file bgp_update_main func: received from %s****", peer->host);
+
+  //zlog_info("*****bgp_route.c file bgp_update_main func: received from %s****", peer->host);
   /* When peer's soft reconfiguration enabled.  Record input packet in
      Adj-RIBs-In.  */
   if (! soft_reconfig && CHECK_FLAG (peer->af_flags[afi][safi], PEER_FLAG_SOFT_RECONFIG)
@@ -2149,18 +2166,30 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
   {
     zlog_info("*****bgp_route.c file bgp_update_main func: start call bgp_adj_in_set****");
     bgp_adj_in_set (rn, peer, attr);
-  }
+  } 
     
 
   char buf1[BUFSIZ];
   //zlog_info("prefix %s info**********", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ));
-
+  bool flag_exist_ri = false;
   /* Check previously received route. */
   for (ri = rn->info; ri; ri = ri->next) 
   {
-    zlog_info("from peer ip addr: %s", ri->peer->host);
-    if (ri->peer == peer && ri->type == type && ri->sub_type == sub_type)
+    zlog_info("Check previously received route, from peer ip addr: %s, ip addr prefix %s", 
+      ri->peer->host,inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ));
+    zlog_info("new route aspath %s;  check received route aspath %s", aspath_print(attr->aspath), aspath_print(ri->attr->aspath));
+    if (ri->peer == peer && attrhash_cmp (ri->attr, attr) && ri->type == type && ri->sub_type == sub_type)
+    {
+      zlog_info("same route: same peer and same attribute");
+      flag_exist_ri = true;
       break;
+    }
+  }
+
+  if (!flag_exist_ri) 
+  {
+    ri = NULL;
+    zlog_info("no same route,so ri = NULL");
   }
 
   /* AS path local-as loop check. */
@@ -2201,7 +2230,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
     goto  filtered;
   }
 
-  zlog_info("before bgp_input_filter, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+  //zlog_info("before bgp_input_filter, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
   /* Apply incoming filter.  */
   if (bgp_input_filter (peer, p, attr, afi, safi) == FILTER_DENY)
   {
@@ -2223,7 +2252,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
     goto filtered;
   }
 
-  zlog_info("after bgp_input_modifier, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+  //zlog_info("after bgp_input_modifier, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
   
 
   /* IPv4 unicast next hop check.  */
@@ -2241,7 +2270,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 	  }
   }
 
-  zlog_info("after IPv4 unicast next hop check, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+  zlog_info("after IPv4 unicast next hop check, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
   
 
   attr_new = bgp_attr_intern (&new_attr);
@@ -2249,12 +2278,14 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
   /* If the update is implicit withdraw. */
   if (ri)
   {
+    zlog_info("find same route, prefix %s info aspath is %s",inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
     ri->uptime = bgp_clock ();
 
       /* Same attribute comes in. */
     if (!CHECK_FLAG (ri->flags, BGP_INFO_REMOVED) 
           && attrhash_cmp (ri->attr, attr_new))
 	  {
+      zlog_info("input same attribute processing");
 	    if (CHECK_FLAG (bgp->af_flags[afi][safi], BGP_CONFIG_DAMPENING)
 	      && peer->sort == BGP_PEER_EBGP
 	      && CHECK_FLAG (ri->flags, BGP_INFO_HISTORY))
@@ -2288,7 +2319,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
       return 0;
 	  }
 
-    zlog_info("after same attr come in, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+    zlog_info("after same attr come in, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
   
 
       /* Withdraw/Announce before we fully processed the withdraw */
@@ -2328,7 +2359,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 	      bgp_damp_withdraw (ri, rn, afi, safi, 1);  
 	  }
 
-    zlog_info("after Update bgp route dampening information, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+    zlog_info("after Update bgp route dampening information, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
   
 
 	
@@ -2351,7 +2382,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 	    if (ret == BGP_DAMP_SUPPRESSED)
 	    {
 	      bgp_unlock_node (rn);
-        zlog_info("after do normal update dampening, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+        zlog_info("after do normal update dampening, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
         return 0;
 	    }
 	  }
@@ -2380,21 +2411,38 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 	  }
     else
 	    bgp_info_set_flag (rn, ri, BGP_INFO_VALID);
+    /* Register new BGP information. */
+    
+    //zlog_info("prefix %s, make info start, aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+  
+    //new = info_make(type, sub_type, peer, attr, rn);
+
+    //zlog_info("prefix %s, make info end, aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(new->attr->aspath));
+  
+    //bgp_info_add (rn, new);
+  
+  /* route_node_get lock */
+    //bgp_unlock_node (rn);
 
     bgp_attr_flush (&new_attr);
 
       /* Process change. */
     bgp_aggregate_increment (bgp, p, ri, afi, safi);
 
+
+
     bgp_process (bgp, rn, afi, safi);
     bgp_unlock_node (rn);
     
-    zlog_info("after Process change, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+    zlog_info("after Process change, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
   
       
     return 0;
   }
-  zlog_info("before received Logging, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+
+  // if(ri) end
+
+  zlog_info("before received Logging, prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf1, BUFSIZ), aspath_print(attr->aspath));
   
      
   /* Received Logging. */
@@ -2408,7 +2456,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 
   zlog_info("make bgp_info : one route for someone prefix");
   /* Make new BGP info. */
-  new = info_make(type, sub_type, peer, attr_new, rn);
+  new = info_make(type, sub_type, peer, attr, rn);
 
   /* Update MPLS tag. */
   if (safi == SAFI_MPLS_VPN)
@@ -2520,6 +2568,7 @@ bgp_withdraw (struct peer *peer, struct prefix *p, struct attr *attr,
   bgp = peer->bgp;
 
   /* Lookup node. */
+  zlog_info("input bgp_route.c bgp_withdraw");
   rn = bgp_afi_node_get (bgp->rib[afi][safi], afi, safi, p, prd);
 
   /* Cisco IOS 12.4(24)T4 on session establishment sends withdraws for all
@@ -3375,6 +3424,15 @@ bgp_nlri_parse_ip (struct peer *peer, struct attr *attr,
 	      continue;
 	    }
         }
+
+  struct bgp_info *test_ri;
+  struct bgp_node *rn;
+  rn = bgp_afi_node_get (peer->bgp->rib[packet->afi][packet->safi], packet->afi, packet->safi, &p, NULL);
+  
+  for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+  {
+    zlog_info("bgp_nlri_parse_ip file: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+  }
 
       /* Normal process. */
       if (attr)
