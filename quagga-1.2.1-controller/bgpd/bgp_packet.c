@@ -1720,6 +1720,20 @@ bgp_nlri_parse (struct peer *peer, struct attr *attr, struct bgp_nlri *packet)
 static int
 bgp_update_receive (struct peer *peer, bgp_size_t size)
 {
+
+  struct bgp_table *table = peer->bgp->rib[AFI_IP][SAFI_UNICAST];
+  struct bgp_node *rn = bgp_table_top(table);
+  struct bgp_info *test_ri; 
+  if (rn) {
+    for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+    {
+      zlog_info("bgp_packet.c file bgp_update_receive func: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+    }
+  } else
+  {
+    zlog_info("bgp table is null");
+  }
+
   int ret, nlri_ret;
   u_char *end;
   struct stream *s;
@@ -1772,6 +1786,18 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
       return -1;
     }
 
+    if (rn) {
+        for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+        {
+          zlog_info("bgp_packet.c file bgp_update_receive func before route length check: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+        }
+      } else
+      {
+        zlog_info("bgp table is null");
+      }
+
+
+
   /* Unfeasible Route Length. */
   withdraw_len = stream_getw (s);
 
@@ -1785,6 +1811,15 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
 		       BGP_NOTIFY_UPDATE_MAL_ATTR);
       return -1;
     }
+if (rn) {
+        for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+        {
+          zlog_info("bgp_packet.c file bgp_update_receive func after route length check: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+        }
+      } else
+      {
+        zlog_info("bgp table is null");
+      }
 
   /* Unfeasible Route packet format check. */
   if (withdraw_len > 0)
@@ -1799,6 +1834,17 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
 
       stream_forward_getp (s, withdraw_len);
     }
+
+    if (rn) {
+        for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+        {
+          zlog_info("bgp_packet.c file bgp_update_receive func after route packet format check: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+        }
+      } else
+      {
+        zlog_info("bgp table is null");
+      }
+
   
   /* Attribute total length check. */
   if (stream_pnt (s) + 2 > end)
@@ -1810,6 +1856,18 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
 		       BGP_NOTIFY_UPDATE_MAL_ATTR);
       return -1;
     }
+
+
+if (rn) {
+        for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+        {
+          zlog_info("bgp_packet.c file bgp_update_receive func before attr length check: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+        }
+      } else
+      {
+        zlog_info("bgp table is null");
+      }
+
 
   /* Fetch attribute total length. */
   attribute_len = stream_getw (s);
@@ -1838,6 +1896,17 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
    */
 #define NLRI_ATTR_ARG (attr_parse_ret != BGP_ATTR_PARSE_WITHDRAW ? &attr : NULL)
 
+
+  if (rn) {
+        for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+        {
+          zlog_info("bgp_packet.c file bgp_update_receive func before parse attr: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+        }
+      } else
+      {
+        zlog_info("bgp table is null");
+      }
+
   /* Parse attribute when it exists. */
   if (attribute_len)
     {
@@ -1850,6 +1919,17 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
 	  return -1;
 	}
     }
+
+
+    if (rn) {
+        for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+        {
+          zlog_info("bgp_packet.c file bgp_update_receive func after parse attr: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+        }
+      } else
+      {
+        zlog_info("bgp table is null");
+      }
   
   /* Logging the attribute. */
   if (attr_parse_ret == BGP_ATTR_PARSE_WITHDRAW
@@ -1868,7 +1948,7 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
               peer->host);
 
       if (ret)
-	zlog (peer->log, lvl, "%s rcvd UPDATE w/ attr: %s",
+	      zlog_info (peer->log, lvl, "%s wq mark rcvd UPDATE w/ attr: %s",
 	      peer->host, attrstr);
     }
   
@@ -1921,11 +2001,19 @@ bgp_update_receive (struct peer *peer, bgp_size_t size)
                      peer->host, nlris[i].afi, nlris[i].safi);
           continue;
         }
-      
+      if (rn) {
+        for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+        {
+          zlog_info("bgp_packet.c file bgp_update_receive func before bgp_nlri_parse: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+        }
+      } else
+      {
+        zlog_info("bgp table is null");
+      }
       /* EoR handled later */
       if (nlris[i].length == 0)
         continue;
-      
+
       switch (i)
         {
           case NLRI_UPDATE:
@@ -2566,6 +2654,19 @@ bgp_read (struct thread *thread)
   peer = THREAD_ARG (thread);
   peer->t_read = NULL;
 
+  struct bgp_table *table = peer->bgp->rib[AFI_IP][SAFI_UNICAST];
+  struct bgp_node *rn = bgp_table_top(table);
+  struct bgp_info *test_ri; 
+  if (rn) {
+    for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+    {
+      zlog_info("bgp_packet.c file bgp_read func: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+    }
+  } else
+  {
+    zlog_info("bgp table is null");
+  }
+
   /* For non-blocking IO check. */
   if (peer->status == Connect)
     {
@@ -2673,6 +2774,16 @@ bgp_read (struct thread *thread)
   size = (peer->packet_size - BGP_HEADER_SIZE);
 
   /* Read rest of the packet and call each sort of packet routine */
+  if (rn) {
+    for (test_ri = rn->info; test_ri; test_ri = test_ri->next) 
+    {
+      zlog_info("bgp_packet.c file bgp_read func before deal with different packet: received from %s, aspath is %s ", test_ri->peer->host, aspath_print(test_ri->attr->aspath));
+    }
+  } else
+  {
+    zlog_info("bgp table is null");
+  }
+
   switch (type) 
     {
     case BGP_MSG_OPEN:
