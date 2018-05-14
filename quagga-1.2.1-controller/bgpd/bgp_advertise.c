@@ -337,28 +337,21 @@ void
 bgp_adj_in_set (struct bgp_node *rn, struct peer *peer, struct attr *attr)
 {
   struct bgp_adj_in *adj;
-  char buf[BUFSIZ];
-  struct prefix *p = &(rn->p); 
-  zlog_info("bgp_advertise.c file call bgp_adj_in_set function");
-  zlog_info("prefix %s info aspath is %s", inet_ntop (p->family, &p->u.prefix, buf, BUFSIZ), aspath_print(attr->aspath));
+
   for (adj = rn->adj_in; adj; adj = adj->next)
+  {
+    if (adj->peer == peer)
     {
-      if (adj->peer == peer)
-	{
-	  if (adj->attr == attr)
-	    {
-        zlog_info("peer and attr are both same");
+      if (adj->attr == attr)
+      {
+        zlog_info("wq: peer and attr are both same in adjrib");
         return;
-        /*zlog_info("existed peer %s but need to update attr**********", peer->host);
-        zlog_info("old attr aspath: %s **********", aspath_print(adj->attr->aspath));
-	      bgp_attr_unintern (&adj->attr);
-	      adj->attr = bgp_attr_intern (attr);
-        zlog_info("new attr aspath: %s **********", aspath_print(attr->aspath));*/
-	    }
-      //return;
-	  
-	}
+        // bgp_attr_unintern (&adj->attr);
+        // adj->attr = bgp_attr_intern (attr);
+      }
+      // return;
     }
+  }
   adj = XCALLOC (MTYPE_BGP_ADJ_IN, sizeof (struct bgp_adj_in));
   adj->peer = peer_lock (peer); /* adj_in peer reference */
   adj->attr = bgp_attr_intern (attr);
@@ -402,13 +395,13 @@ bgp_sync_init (struct peer *peer)
   for (afi = AFI_IP; afi < AFI_MAX; afi++)
     for (safi = SAFI_UNICAST; safi < SAFI_MAX; safi++)
       {
-	sync = XCALLOC (MTYPE_BGP_SYNCHRONISE, 
-	                sizeof (struct bgp_synchronize));
-	BGP_ADV_FIFO_INIT (&sync->update);
-	BGP_ADV_FIFO_INIT (&sync->withdraw);
-	BGP_ADV_FIFO_INIT (&sync->withdraw_low);
-	peer->sync[afi][safi] = sync;
-	peer->hash[afi][safi] = hash_create (baa_hash_key, baa_hash_cmp);
+        sync = XCALLOC (MTYPE_BGP_SYNCHRONISE, 
+        sizeof (struct bgp_synchronize));
+        BGP_ADV_FIFO_INIT (&sync->update);
+        BGP_ADV_FIFO_INIT (&sync->withdraw);
+        BGP_ADV_FIFO_INIT (&sync->withdraw_low);
+        peer->sync[afi][safi] = sync;
+        peer->hash[afi][safi] = hash_create (baa_hash_key, baa_hash_cmp);
       }
 }
 
@@ -420,13 +413,13 @@ bgp_sync_delete (struct peer *peer)
 
   for (afi = AFI_IP; afi < AFI_MAX; afi++)
     for (safi = SAFI_UNICAST; safi < SAFI_MAX; safi++)
-      {
-	if (peer->sync[afi][safi])
-	  XFREE (MTYPE_BGP_SYNCHRONISE, peer->sync[afi][safi]);
-	peer->sync[afi][safi] = NULL;
-	
-	if (peer->hash[afi][safi])
-	  hash_free (peer->hash[afi][safi]);
-	peer->hash[afi][safi] = NULL;
-      }
+    {
+      if (peer->sync[afi][safi])
+      XFREE (MTYPE_BGP_SYNCHRONISE, peer->sync[afi][safi]);
+      peer->sync[afi][safi] = NULL;
+      
+      if (peer->hash[afi][safi])
+      hash_free (peer->hash[afi][safi]);
+      peer->hash[afi][safi] = NULL;
+    }
 }

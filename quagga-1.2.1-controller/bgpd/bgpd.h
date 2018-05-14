@@ -129,7 +129,8 @@ struct bgp
   /* BGP Per AF flags */
   u_int16_t af_flags[AFI_MAX][SAFI_MAX];
 #define BGP_CONFIG_DAMPENING              (1 << 0)
-
+  
+  struct bgp_table *public_rib[AFI_MAX][SAFI_MAX];
   /* Static route configuration.  */
   struct bgp_table *route[AFI_MAX][SAFI_MAX];
 
@@ -316,6 +317,7 @@ struct peer
 
   /* Peer specific RIB when configured as route-server-client. */
   struct bgp_table *rib[AFI_MAX][SAFI_MAX];
+  struct bgp_table *private_rib[AFI_MAX][SAFI_MAX];
 
   /* Packet receive and send buffer. */
   struct stream *ibuf;

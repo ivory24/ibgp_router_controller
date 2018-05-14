@@ -782,7 +782,12 @@ assegments_parse (struct stream *s, size_t length,
         head = prev = seg;
       
       for (i = 0; i < segh.length; i++)
-	seg->as[i] = (use32bit) ? stream_getl (s) : stream_getw (s);
+      {
+	       seg->as[i] = (use32bit) ? stream_getl (s) : stream_getw (s);
+         //zlog_info("wq: seg->as is %d , assegments_parse func in bgp_aspath.c", seg->as[i]);
+      }
+
+
 
       bytes += seg_size;
       
@@ -1548,6 +1553,28 @@ aspath_add_asns (struct aspath *aspath, as_t asno, u_char type, unsigned num)
   aspath_str_update (aspath);
   return aspath;
 }
+
+
+/* Add specified AS to the leftmost of aspath. */
+struct aspath *
+aspath_del_asns (struct aspath *aspath)
+{
+  // zlog_info("wq: aspath 1 is %s", aspath_print(aspath));
+  struct assegment *seg;
+
+  seg = aspath->segments;
+  
+  for (u_short i = 0; i < seg->length-1; i++){
+    seg->as[i] = seg->as[i+1];
+    // zlog_info("wq: aspath  is %d", seg->as[i]);
+  }
+  seg->length -= 1;
+  
+  aspath_str_update (aspath);
+  // zlog_info("wq: aspath 2 is %s", aspath_print(aspath));
+  return aspath;
+}
+
 
 /* Add specified AS to the leftmost of aspath num times. */
 struct aspath *

@@ -937,6 +937,12 @@ peer_create (union sockunion *su, struct bgp *bgp, as_t local_as,
   if (! active && peer_active (peer))
     bgp_timer_set (peer);
 
+  for (afi = AFI_IP; afi < AFI_MAX; afi++)
+    for (safi = SAFI_UNICAST; safi < SAFI_MAX; safi++)
+      {
+        peer->private_rib[afi][safi] = bgp_table_init (afi, safi);
+      }
+
   return peer;
 }
 
@@ -1036,7 +1042,7 @@ peer_remote_as (struct bgp *bgp, union sockunion *su, as_t *as,
   peer = peer_lookup (bgp, su);
 
   if (peer)
-    {
+        {
       /* When this peer is a member of peer-group.  */
       if (peer->group)
 	{
@@ -2083,11 +2089,12 @@ bgp_create (as_t *as, const char *name)
   for (afi = AFI_IP; afi < AFI_MAX; afi++)
     for (safi = SAFI_UNICAST; safi < SAFI_MAX; safi++)
       {
-	bgp->route[afi][safi] = bgp_table_init (afi, safi);
-	bgp->aggregate[afi][safi] = bgp_table_init (afi, safi);
-	bgp->rib[afi][safi] = bgp_table_init (afi, safi);
-	bgp->maxpaths[afi][safi].maxpaths_ebgp = BGP_DEFAULT_MAXPATHS;
-	bgp->maxpaths[afi][safi].maxpaths_ibgp = BGP_DEFAULT_MAXPATHS;
+      	bgp->route[afi][safi] = bgp_table_init (afi, safi);
+      	bgp->aggregate[afi][safi] = bgp_table_init (afi, safi);
+      	bgp->rib[afi][safi] = bgp_table_init (afi, safi);
+        bgp->public_rib[afi][safi] = bgp_table_init (afi, safi);
+      	bgp->maxpaths[afi][safi].maxpaths_ebgp = BGP_DEFAULT_MAXPATHS;
+      	bgp->maxpaths[afi][safi].maxpaths_ibgp = BGP_DEFAULT_MAXPATHS;
       }
 
   bgp->default_local_pref = BGP_DEFAULT_LOCAL_PREF;

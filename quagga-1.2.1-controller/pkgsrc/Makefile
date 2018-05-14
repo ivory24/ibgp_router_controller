@@ -171,8 +171,8 @@ CARES_LIBS = -L/usr/local/lib -lcares
 CC = gcc
 CCDEPMODE = depmode=gcc3
 CFLAGS = -g -O2 -g -Os -fstack-protector-strong --param=ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -fpie -fno-omit-frame-pointer -Wall -Wextra -Wmissing-prototypes -Wmissing-declarations -Wpointer-arith -Wbad-function-cast -Wwrite-strings -Wno-unused-result -Wno-unused-parameter -Wno-missing-field-initializers
-CONFDATE = 20180413
-CONFIG_ARGS = --enable-vtysh --enable-user=root --enable-group=root --enable-vty-group=root --prefix=/usr --sysconfdir=/etc/quagga --localstatedir=/var/run/quagga --no-create --no-recursion
+CONFDATE = 20180510
+CONFIG_ARGS = --enable-vtysh --enable-user=root --enable-group=root --enable-vty-group=root --prefix=/usr --sysconfdir=/etc/quagga --localstatedir=/var/run/quagga
 CPP = gcc -E
 CPPFLAGS = 
 CURSES = 
