@@ -2139,17 +2139,20 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
   memset (&new_extra, 0, sizeof(struct attr_extra));
 
 
-  u_int32_t peer_weight;
+  // u_int32_t peer_weight;
 
-  peer_weight = (attr->aspath->segments->as)[0];
-  zlog_info("wq: weight %d", peer_weight);
+  // peer_weight = (attr->aspath->segments->as)[0];
+  // zlog_info("wq: weight %d", peer_weight);
   
-  attr->aspath = aspath_del_asns(attr->aspath);
+  // attr->aspath = aspath_del_asns(attr->aspath);
 
-  zlog_info("wq: input bgp_update_main from %s, delete aspath is %s", peer->host, aspath_print(attr->aspath));
+  // zlog_info("wq: input bgp_update_main from %s, delete aspath is %s", peer->host, aspath_print(attr->aspath));
 
   bgp = peer->bgp;
   rn = bgp_afi_node_get (bgp->rib[afi][safi], afi, safi, p, prd);
+
+
+  // attr->extra->weight = peer_weight;
   
   /* When peer's soft reconfiguration enabled.  Record input packet in
      Adj-RIBs-In.  */
@@ -2213,14 +2216,12 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
   struct attr_extra private_new_extra;
   struct attr      *private_attr_new;
 
-  if (peer_weight != 0) {
+  if (attr->extra->weight != 0) {
     memset (&private_new_attr, 0, sizeof(struct attr));
     memset (&private_new_extra, 0, sizeof(struct attr_extra));
 
     private_new_attr.extra = &private_new_extra;
     bgp_attr_dup(&private_new_attr, attr);
-
-    private_new_attr.extra->weight = peer_weight;
 
     private_attr_new = bgp_attr_intern(&private_new_attr);
 
@@ -2256,6 +2257,16 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
       zlog_info("wq: private table check end");
     }
   }
+
+
+  struct listnode *node, *nnode;
+  struct peer* every_peer;
+  for (ALL_LIST_ELEMENTS(peer->bgp->peer, node, nnode, every_peer))
+  {
+    if (every_peer->status == Established)
+      zlog_info("wq: print all peer %s", every_peer->host);
+  }
+
 
 
 

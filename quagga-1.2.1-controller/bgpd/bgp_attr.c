@@ -1031,7 +1031,8 @@ const u_int8_t attr_flags_values [] = {
   [BGP_ATTR_EXT_COMMUNITIES] =  BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANS,
   [BGP_ATTR_AS4_PATH] =         BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANS,
   [BGP_ATTR_AS4_AGGREGATOR] =   BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANS,
-  [BGP_ATTR_LARGE_COMMUNITIES] = BGP_ATTR_FLAG_TRANS | BGP_ATTR_FLAG_OPTIONAL
+  [BGP_ATTR_LARGE_COMMUNITIES] = BGP_ATTR_FLAG_TRANS | BGP_ATTR_FLAG_OPTIONAL,
+  [BGP_ATTR_WEIGHT] = BGP_ATTR_FLAG_TRANS
 };
 static const size_t attr_flags_values_max = array_size(attr_flags_values) - 1;
 
@@ -1141,6 +1142,36 @@ bgp_attr_origin (struct bgp_attr_parser_args *args)
 
   /* Set oring attribute flag. */
   attr->flag |= ATTR_FLAG_BIT (BGP_ATTR_ORIGIN);
+
+  return 0;
+}
+
+
+static bgp_attr_parse_ret_t
+bgp_attr_weight (struct bgp_attr_parser_args *args)
+{
+  struct peer *const peer = args->peer;
+  struct attr *const attr = args->attr;
+  const bgp_size_t length = args->length;
+  
+  /* If any recognized attribute has Attribute Length that conflicts
+     with the expected length (based on the attribute type code), then
+     the Error Subcode is set to Attribute Length Error.  The Data
+     field contains the erroneous attribute (type, length and
+     value). */
+  if (length != 2)
+    {
+      zlog (peer->log, LOG_ERR, "Weight attribute length is not two %d",
+      length);
+      return bgp_attr_malformed (args,
+                                 BGP_NOTIFY_UPDATE_ATTR_LENG_ERR,
+                                 args->total);
+    }
+
+  /* Fetch weight attribute. */
+  attr->extra->weight = stream_getw (BGP_INPUT (peer));
+
+  zlog_info("wq: successfully parse the weight, %d", attr->extra->weight);
 
   return 0;
 }
@@ -2307,6 +2338,9 @@ bgp_attr_parse (struct peer *peer, struct attr *attr, bgp_size_t size,
         case BGP_ATTR_ENCAP:
           ret = bgp_attr_encap (type, peer, length, attr, flag, startp);
           break;
+  case BGP_ATTR_WEIGHT:
+    ret = bgp_attr_weight (&attr_args);
+    break;
 	default:
 	  ret = bgp_attr_unknown (&attr_args);
 	  break;
