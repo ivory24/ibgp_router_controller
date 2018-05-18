@@ -144,6 +144,8 @@ bgp_connect_check (struct peer *peer)
 static struct stream *
 bgp_update_packet (struct peer *peer, afi_t afi, safi_t safi)
 {
+
+  zlog_info("wq: start bgp_update_packet");
   struct stream *s;
   struct stream *snlri;
   struct bgp_adj_out *adj;

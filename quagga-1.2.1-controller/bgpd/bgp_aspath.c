@@ -1249,6 +1249,8 @@ aspath_firstas_check (struct aspath *aspath, as_t asno)
 int
 aspath_loop_check (struct aspath *aspath, as_t asno)
 {
+
+  zlog_info("wq: input aspath_loop_check");
   struct assegment *seg;
   int count = 0;
 
@@ -1267,7 +1269,7 @@ aspath_loop_check (struct aspath *aspath, as_t asno)
       
       seg = seg->next;
     }
-  return count;
+  return count-1;
 }
 
 /* When all of AS path is private AS return 1.  */

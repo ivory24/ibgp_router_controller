@@ -197,6 +197,35 @@ bgp_info_add (struct bgp_node *rn, struct bgp_info *ri)
   peer_lock (ri->peer); /* bgp_info peer reference */
 }
 
+
+// return 0 is same
+int 
+bgp_route_cmp(struct bgp_info * ri, struct attr *newattr) 
+{
+  struct attr * attr = ri->attr;
+  if (attr->local_pref != newattr->local_pref) {
+    zlog_info("wq: local_pref is different");
+    return 1;
+  }
+  if (attr->med != newattr->med) {
+    zlog_info("wq: med is different");
+    return 1;
+  }
+  //same return 1
+  if (!aspath_cmp(attr->aspath, newattr->aspath))  {
+    zlog_info("wq: aspath is different");
+    return 1;
+  }
+  //same retuen 1
+  if (!IPV4_ADDR_SAME(&attr->nexthop, &newattr->nexthop))  {
+    zlog_info("wq: nexthop is different");
+    return 1;
+  }
+  return 0;
+}
+
+
+
 /* Do the actual removal of info from RIB, for use by bgp_process 
    completion callback *only* */
 static void
@@ -822,8 +851,9 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
     return 0;
 
   /* Do not send back route to sender. */
-  if (from == peer)
-    return 0;
+  //zlog_info("need to send every iBGP peer");
+  // if (from == peer)
+  //   return 0;
 
   /* Aggregate-address suppress check. */
   if (ri->extra && ri->extra->suppress)
@@ -838,18 +868,20 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
       else if (p->family == AF_INET6 && p->prefixlen == 0)
 	return 0;
     }
-
+    //zlog_info("wq: start to Transparency check");
   /* Transparency check. */
   if (CHECK_FLAG (peer->af_flags[afi][safi], PEER_FLAG_RSERVER_CLIENT)
       && CHECK_FLAG (from->af_flags[afi][safi], PEER_FLAG_RSERVER_CLIENT))
     transparent = 1;
   else
     transparent = 0;
-
+   //zlog_info("wq: end to Transparency check");
   /* If community is not disabled check the no-export and local. */
   if (! transparent && bgp_community_filter (peer, riattr))
     return 0;
 
+
+   //zlog_info("wq: start to originator-id check");
   /* If the attribute has originator-id and it is same as remote
      peer's id. */
   if (riattr->flag & ATTR_FLAG_BIT (BGP_ATTR_ORIGINATOR_ID))
@@ -865,7 +897,7 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
 	  return 0;
 	}
     }
- 
+ //zlog_info("wq: start to ORF prefix-list filter check");
   /* ORF prefix-list filter check */
   if (CHECK_FLAG (peer->af_cap[afi][safi], PEER_CAP_ORF_PREFIX_RM_ADV)
       && (CHECK_FLAG (peer->af_cap[afi][safi], PEER_CAP_ORF_PREFIX_SM_RCV)
@@ -875,7 +907,7 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
 	if (prefix_list_apply (peer->orf_plist[afi][safi], p) == PREFIX_DENY)
           return 0;
       }
-
+//zlog_info("wq: start to Output filter check");
   /* Output filter check. */
   if (bgp_output_filter (peer, p, riattr, afi, safi) == FILTER_DENY)
     {
@@ -887,7 +919,7 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
 	      p->prefixlen);
       return 0;
     }
-
+//zlog_info("wq: start to aspath_loop_check");
 #ifdef BGP_SEND_ASPATH_CHECK
   /* AS path loop check. */
   if (aspath_loop_check (riattr->aspath, peer->as))
@@ -898,10 +930,10 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
 	      peer->host, peer->as);
       return 0;
     }
-
+   //zlog_info("wq: start to check the CONFED ID");
   /* If we're a CONFED we need to loop check the CONFED ID too */
   if (CHECK_FLAG(bgp->config, BGP_CONFIG_CONFEDERATION))
-    {
+      {
       if (aspath_loop_check(riattr->aspath, bgp->confed_id))
 	{
 	  if (BGP_DEBUG (filter, FILTER))  
@@ -914,15 +946,17 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
     }
 #endif /* BGP_SEND_ASPATH_CHECK */
 
+//zlog_info("wq: start to Route-Reflect check");
+
   /* Route-Reflect check. */
   if (from->sort == BGP_PEER_IBGP && peer->sort == BGP_PEER_IBGP)
     reflect = 1;
   else
     reflect = 0;
-
+  reflect = 0;
   /* IBGP reflection check. */
   if (reflect)
-    {
+      {
       /* A route from a Client peer. */
       if (CHECK_FLAG (from->af_flags[afi][safi], PEER_FLAG_REFLECTOR_CLIENT))
 	{
@@ -945,7 +979,7 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
   
   /* For modify attribute, copy it to temporary structure. */
   bgp_attr_dup (attr, riattr);
-  
+  //zlog_info("wq: local-preference is not set");
   /* If local-preference is not set. */
   if ((peer->sort == BGP_PEER_IBGP
        || peer->sort == BGP_PEER_CONFED)
@@ -984,6 +1018,9 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
     (safi != SAFI_ENCAP && p->family == AF_INET6) || \
     (safi == SAFI_ENCAP && attr->extra->mp_nexthop_len == 16))
 
+
+
+  zlog_info("wq: start next-hop-set");
   /* next-hop-set */
   if (transparent
       || (reflect && ! CHECK_FLAG (peer->af_flags[afi][safi], PEER_FLAG_NEXTHOP_SELF_ALL))
@@ -992,7 +1029,7 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
 	      || (NEXTHOP_IS_V6 &&
                   ! IN6_IS_ADDR_UNSPECIFIED(&attr->extra->mp_nexthop_global))
 	      )))
-    {
+      {
       /* NEXT-HOP Unchanged. */
     }
   else if (CHECK_FLAG (peer->af_flags[afi][safi], PEER_FLAG_NEXTHOP_SELF)
@@ -1001,7 +1038,7 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
                IN6_IS_ADDR_UNSPECIFIED(&attr->extra->mp_nexthop_global))
 	   || (peer->sort == BGP_PEER_EBGP
                && (bgp_multiaccess_check_v4 (attr->nexthop, peer) == 0)))
-    {
+      {
       /* Set IPv4 nexthop. */
       if (NEXTHOP_IS_V4)
 	{
@@ -1022,7 +1059,7 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
     }
 
   if (p->family == AF_INET6 && safi != SAFI_ENCAP)
-    {
+      {
       /* Left nexthop_local unchanged if so configured. */ 
       if ( CHECK_FLAG (peer->af_flags[afi][safi], 
            PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED) )
@@ -1066,6 +1103,8 @@ bgp_announce_check (struct bgp_info *ri, struct peer *peer, struct prefix *p,
       && aspath_private_as_check (attr->aspath))
     attr->aspath = aspath_empty_get ();
 
+
+  //zlog_info("wq ROUTE_MAP_OUT_NAME ");
   /* Route map & unsuppress-map apply. */
   if (ROUTE_MAP_OUT_NAME (filter)
       || (ri->extra && ri->extra->suppress) )
@@ -1493,8 +1532,10 @@ bgp_process_announce_selected (struct peer *peer, struct bgp_info *selected,
       case BGP_TABLE_MAIN:
       /* Announcement to peer->conf.  If the route is filtered,
          withdraw it. */
-        if (selected && bgp_announce_check (selected, peer, p, &attr, afi, safi))
+        if (selected && bgp_announce_check (selected, peer, p, &attr, afi, safi)) {
+          zlog_info("wq: start into bgp_adj_out_set, to %s", peer->host);
           bgp_adj_out_set (rn, peer, p, &attr, afi, safi, selected);
+        }
         else
           bgp_adj_out_unset (rn, peer, p, afi, safi);
         break;
@@ -1635,6 +1676,7 @@ bgp_process_main (struct work_queue *wq, void *data)
   /* Check each BGP peer. */
   for (ALL_LIST_ELEMENTS (bgp->peer, node, nnode, peer))
     {
+      zlog_info("start announce route aspath %s to %s", aspath_print(new_select->attr->aspath), peer->host);
       bgp_process_announce_selected (peer, new_select, rn, afi, safi);
     }
 
@@ -2115,6 +2157,13 @@ bgp_withdraw_rsclient (struct peer *rsclient, afi_t afi, safi_t safi,
   bgp_unlock_node (rn);
 }
 
+
+
+static void
+bgp_private_best_selection(struct bgp_node *rn, struct bgp_info *res) 
+{
+  
+}
 static int
 bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 	    afi_t afi, safi_t safi, int type, int sub_type,
@@ -2178,97 +2227,165 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
   public_attr_new = bgp_attr_intern(&public_new_attr);
 
   bool needadd = 1;
-
-  public_rn = bgp_afi_node_get(bgp->public_rib[afi][safi], afi, safi, p, prd);
   
+  public_rn = bgp_afi_node_get(bgp->public_rib[afi][safi], afi, safi, p, prd);
+
   if(public_rn) 
   {
-    for (public_ri = public_rn->info; public_ri; public_ri = public_ri->next)
-    {
-      if (public_ri->peer == peer && attrhash_cmp(public_ri->attr, attr))
+    if (!prefix_cmp(&public_rn->p, p)) {
+      zlog_info("wq: prefix same, so check all routes");
+      for (public_ri = public_rn->info; public_ri; public_ri = public_ri->next)
       {
-        zlog_info("wq: same peer and same attr in locrib, new aspath is %s, old %s", aspath_print(attr->aspath),aspath_print(public_ri->attr->aspath));
-        needadd = 0;
-        break;
+        if (!bgp_route_cmp(public_ri, attr))
+        {
+          needadd = 0;
+          break;
+        }
       }
     }
   } else
   {
     zlog_info("wq: can not find the prefix bgp_node");
   }
+
   if (needadd)
   {
+    public_rn = bgp_afi_node_get(bgp->public_rib[afi][safi], afi, safi, p, prd);
     public_new = info_make(type, sub_type, peer, public_attr_new,public_rn);
     bgp_info_add(public_rn, public_new);
     bgp_attr_flush(&public_new_attr);
-    zlog_info("wq: public table check start");
+  }
+
+  char buf1[BUFSIZ];
+  zlog_info("wq: public table check start");
+  for (public_rn = bgp_table_top(bgp->public_rib[afi][safi]);public_rn; public_rn = bgp_route_next(public_rn)) 
+  {
     for (public_ri = public_rn->info; public_ri; public_ri = public_ri->next)
     {
-      zlog_info("wq: receive from %s, aspath is %s", public_ri->peer->host, aspath_print(public_ri->attr->aspath));
-    }
-    zlog_info("wq: public table check end");
-  }
-
-  struct bgp_node  *private_rn;
-  struct bgp_info  *private_ri;
-  struct bgp_info  *private_new;
-  struct attr       private_new_attr;
-  struct attr_extra private_new_extra;
-  struct attr      *private_attr_new;
-
-  if (attr->extra->weight != 0) {
-    memset (&private_new_attr, 0, sizeof(struct attr));
-    memset (&private_new_extra, 0, sizeof(struct attr_extra));
-
-    private_new_attr.extra = &private_new_extra;
-    bgp_attr_dup(&private_new_attr, attr);
-
-    private_attr_new = bgp_attr_intern(&private_new_attr);
-
-    bool needaddprivate = 1;
-
-    private_rn = bgp_afi_node_get(peer->private_rib[afi][safi], afi, safi, p, prd);
-    
-    if(private_rn) 
-    {
-      for (private_ri = private_rn->info; private_ri; private_ri = private_ri->next)
-      {
-        if (private_ri->peer == peer && attrhash_cmp(private_ri->attr, attr))
-        {
-          zlog_info("wq: same peer and same attr in private_locrib, new aspath is %s, old %s", aspath_print(attr->aspath),aspath_print(private_ri->attr->aspath));
-          needaddprivate = 0;
-          break;
-        }
-      }
-    } else
-    {
-      zlog_info("wq: can not find the prefix bgp_node in private_locrib");
-    }
-    if (needaddprivate)
-    {
-      private_new = info_make(type, sub_type, peer, private_attr_new,private_rn);
-      bgp_info_add(private_rn, private_new);
-      bgp_attr_flush(&private_new_attr);
-      zlog_info("wq: private table check start");
-      for (private_ri = private_rn->info; private_ri; private_ri = private_ri->next)
-      {
-        zlog_info("wq: private rib receive from %s, aspath is %s, weight is %d", private_ri->peer->host, aspath_print(private_ri->attr->aspath), private_ri->attr->extra->weight);
-      }
-      zlog_info("wq: private table check end");
+      zlog_info("wq: ip addr %s, receive from %s, aspath is %s", 
+        inet_ntop(public_rn->p.family, &public_rn->p.u.prefix,buf1, BUFSIZ),
+        public_ri->peer->host, aspath_print(public_ri->attr->aspath));
     }
   }
-
+  zlog_info("wq: public table check end");
 
   struct listnode *node, *nnode;
-  struct peer* every_peer;
-  for (ALL_LIST_ELEMENTS(peer->bgp->peer, node, nnode, every_peer))
+  struct peer* one_peer;
+  for (ALL_LIST_ELEMENTS(peer->bgp->peer, node, nnode, one_peer))
   {
-    if (every_peer->status == Established)
-      zlog_info("wq: print all peer %s", every_peer->host);
+    if (one_peer->status == Established) {
+      struct bgp_node  *private_rn;
+      struct bgp_info  *private_ri;
+      private_rn = bgp_afi_node_get(one_peer->private_rib[afi][safi], afi, safi, p, prd);
+      if (private_rn->info) {
+
+          struct bgp_info  *private_new;
+          struct attr       private_new_attr;
+          struct attr_extra private_new_extra;
+          struct attr      *private_attr_new;
+
+
+          memset (&private_new_attr, 0, sizeof(struct attr));
+          memset (&private_new_extra, 0, sizeof(struct attr_extra));
+
+          private_new_attr.extra = &private_new_extra;
+          bgp_attr_dup(&private_new_attr, attr);
+
+          private_attr_new = bgp_attr_intern(&private_new_attr);
+          needadd = 1;
+          for (private_ri = private_rn->info; private_ri; private_ri = private_ri->next)
+          {
+              if (!bgp_route_cmp(private_ri, attr))
+              {
+                needadd = 0;
+                break;
+              }
+          }
+          if (needadd) { 
+            private_new = info_make(type, sub_type, peer, private_attr_new,private_rn);
+            bgp_info_add(private_rn, private_new);
+            bgp_attr_flush(&private_new_attr);
+          }
+
+    } else {
+        //without prefix
+        if (one_peer == peer && attr->extra->weight != 0) {
+          // insert new, and  copy old public
+          zlog_info("wq insert new, and  copy old public");
+          struct bgp_info  *private_new;
+          struct attr       private_new_attr;
+          struct attr_extra private_new_extra;
+          struct attr      *private_attr_new;
+
+
+          memset (&private_new_attr, 0, sizeof(struct attr));
+          memset (&private_new_extra, 0, sizeof(struct attr_extra));
+
+          private_new_attr.extra = &private_new_extra;
+          bgp_attr_dup(&private_new_attr, attr);
+
+          private_attr_new = bgp_attr_intern(&private_new_attr);
+
+
+          private_new = info_make(type, sub_type, peer, private_attr_new,private_rn);
+          bgp_info_add(private_rn, private_new);
+          bgp_attr_flush(&private_new_attr);
+
+          zlog_info("wq: start public copy check");
+
+          public_rn = bgp_afi_node_get(bgp->public_rib[afi][safi], afi, safi, p, prd);
+
+          for (public_ri = public_rn->info; public_ri; public_ri = public_ri->next)
+          {
+             // zlog_info("wq: aspath cmp res %d", aspath_cmp(public_ri->attr->aspath, private_new->attr->aspath));
+             // zlog_info("new route aspath %s, old public aspath %s", aspath_print(public_ri->attr->aspath), aspath_print(private_new->attr->aspath));
+             // IPV4_ADDR_CMP(&private_new->attr->nexthop, &public_ri->attr->nexthop)
+              if (bgp_route_cmp(public_ri, attr)) {
+                zlog_info("wq: bgp info not same");
+                struct bgp_info  *copy_public;
+                struct attr       copy_public_attr;
+                struct attr_extra copy_public_extra;
+                struct attr      *copy_public_new;
+
+                memset (&copy_public_attr, 0, sizeof(struct attr));
+                memset (&copy_public_extra, 0, sizeof(struct attr_extra));
+
+                copy_public_attr.extra = &copy_public_extra;
+                bgp_attr_dup(&copy_public_attr, public_ri->attr);
+
+                copy_public_new = bgp_attr_intern(&copy_public_attr);
+
+
+                copy_public = info_make(type, sub_type, public_ri->peer, copy_public_new, private_rn);
+                bgp_info_add(private_rn, copy_public);
+                bgp_attr_flush(&copy_public_attr);
+              }
+          }
+        }
+      }
+      zlog_info("wq: Established peer private-rib  %s table check start", one_peer->host);
+      for (public_rn = bgp_table_top(one_peer->private_rib[afi][safi]);public_rn; public_rn = bgp_route_next(public_rn)) {
+        for (public_ri = public_rn->info; public_ri; public_ri = public_ri->next)
+        {
+          zlog_info("wq: ip addr %s, receive from %s, aspath is %s", 
+            inet_ntop(public_rn->p.family, &public_rn->p.u.prefix,buf1, BUFSIZ),
+            public_ri->peer->host, aspath_print(public_ri->attr->aspath));
+        }
+      }
+      zlog_info("wq: Established peer private-rib  %s table check end", one_peer->host);
+    }
   }
+  
+
+
+  
 
 
 
+  
+
+
+  
 
   /* Check previously received route. */
   for (ri = rn->info; ri; ri = ri->next)
@@ -2418,7 +2535,7 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
 	      inet_ntop(p->family, &p->u.prefix, buf, SU_ADDRSTRLEN),
 	      p->prefixlen);
 
-      /* graceful restart STALE flag unset. */
+       /*graceful restart STALE flag unset. */
       if (CHECK_FLAG (ri->flags, BGP_INFO_STALE))
 	bgp_info_unset_flag (rn, ri, BGP_INFO_STALE);
 

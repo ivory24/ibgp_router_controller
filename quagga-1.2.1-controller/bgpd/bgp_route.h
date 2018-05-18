@@ -218,6 +218,7 @@ extern void bgp_info_delete (struct bgp_node *rn, struct bgp_info *ri);
 extern struct bgp_info_extra *bgp_info_extra_get (struct bgp_info *);
 extern void bgp_info_set_flag (struct bgp_node *, struct bgp_info *, u_int32_t);
 extern void bgp_info_unset_flag (struct bgp_node *, struct bgp_info *, u_int32_t);
+extern int bgp_route_cmp(struct bgp_info *, struct attr *);
 
 extern int bgp_nlri_parse_ip (struct peer *, struct attr *, struct bgp_nlri *);
 

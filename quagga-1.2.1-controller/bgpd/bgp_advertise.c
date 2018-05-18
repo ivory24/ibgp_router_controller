@@ -266,6 +266,7 @@ bgp_adj_out_set (struct bgp_node *rn, struct peer *peer, struct prefix *p,
   adv->adj = adj;
 
   /* Add new advertisement to advertisement attribute list. */
+  zlog_info("wq: start announce");
   bgp_advertise_add (adv->baa, adv);
 
   BGP_ADV_FIFO_ADD (&peer->sync[afi][safi]->update, &adv->fifo);
