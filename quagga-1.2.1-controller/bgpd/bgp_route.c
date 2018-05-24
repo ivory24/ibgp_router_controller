@@ -2160,9 +2160,56 @@ bgp_withdraw_rsclient (struct peer *rsclient, afi_t afi, safi_t safi,
 
 
 static void
-bgp_private_best_selection(struct bgp_node *rn, struct bgp_info *res) 
+bgp_private_best_selection(struct bgp_node *rn) 
 {
-  
+  //bgp_info_delete
+  //bgp_info_add
+ zlog_info("wq: start private_best_selection");
+  struct bgp_node *copy_rn;
+  struct bgp_info *copy_ri;
+
+  copy_rn = XCALLOC(MTYPE_BGP_NODE, sizeof (struct bgp_node));
+
+
+  struct bgp_info *ri;
+
+  if (!rn)
+    return;
+  if (!rn->info)
+    return;
+  char buf1[BUFSIZ];
+  for (ri = rn->info; ri; ri = ri->next)
+  {
+     zlog_info("wq: ip addr %s, receive from %s, aspath is %s", 
+        inet_ntop(rn->p.family, &rn->p.u.prefix,buf1, BUFSIZ),
+        ri->peer->host, aspath_print(ri->attr->aspath));
+    prefix_copy(&copy_rn->p, &rn->p);
+    copy_ri = info_make(ri->type, ri->sub_type, ri->peer, ri->attr, copy_rn);
+    bgp_info_add(copy_rn, copy_ri);
+  }
+
+  for (ri = copy_rn->info; ri; ri = ri->next)
+  {
+    zlog_info("wq: ip addr %s, receive from %s, aspath is %s", 
+        inet_ntop(copy_rn->p.family, &copy_rn->p.u.prefix,buf1, BUFSIZ),
+        ri->peer->host, aspath_print(ri->attr->aspath));
+  }
+  zlog_info("wq: end private_best_selection");
+
+  //weight calculation
+  ri = copy_rn->info;
+  u_int32_t max_weight = copy_ri->attr->extra->weight;
+
+  /*for (ri = copy_rn->info; ri; ri = ri->next)
+  {
+    zlog_info("wq: ip addr %s, receive from %s, aspath is %s", 
+        inet_ntop(copy_rn->p.family, &copy_rn->p.u.prefix,buf1, BUFSIZ),
+        ri->peer->host, aspath_print(ri->attr->aspath));
+    if (ri->attr->attr_extra < max_weight) {
+      
+  }
+    }*/
+
 }
 static int
 bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
@@ -2376,7 +2423,8 @@ bgp_update_main (struct peer *peer, struct prefix *p, struct attr *attr,
     }
   }
   
-
+  //public_rn = bgp_afi_node_get(bgp->public_rib[afi][safi], afi, safi, p, prd);
+  //bgp_private_best_selection(public_rn);
 
   
 
@@ -7006,6 +7054,114 @@ bgp_show_table (struct vty *vty, struct bgp_table *table, struct in_addr *router
 }
 
 static int
+bgp_show_public_table (struct vty *vty)
+{
+
+  struct bgp *bgp;
+  struct bgp_table *table;
+  struct bgp_info *ri;
+  struct bgp_node *rn;
+  int display;
+  unsigned long output_count;
+  unsigned long total_count;
+
+  /* This is first entry point, so reset total line. */
+  output_count = 0;
+  total_count  = 0;
+  bgp = bgp_get_default();
+
+  table = bgp->public_rib[AFI_IP][SAFI_UNICAST];
+
+
+  vty_out (vty, "BGP public table, local router ID is %s%s", inet_ntoa (*(&bgp->router_id)), VTY_NEWLINE);
+  vty_out (vty, BGP_SHOW_HEADER, VTY_NEWLINE);       
+  /* Start processing of routes. */
+  for (rn = bgp_table_top (table); rn; rn = bgp_route_next (rn)) 
+    if (rn->info != NULL)
+      {
+        display = 0;
+
+        for (ri = rn->info; ri; ri = ri->next)
+          {
+              total_count++;
+              route_vty_out (vty, &rn->p, ri, display, SAFI_UNICAST);
+              display++;
+          }
+          if (display)
+            output_count++;
+      }
+ vty_out (vty, "%sDisplayed  %ld prefixes and %ld routes %s",
+           VTY_NEWLINE, output_count, total_count, VTY_NEWLINE);
+
+  return CMD_SUCCESS;
+}
+
+
+static int
+bgp_show_private_table (struct vty *vty)
+{
+
+  struct bgp *bgp;
+  struct bgp_table *table;
+  struct bgp_info *ri;
+  struct bgp_node *rn;
+  int display;
+  unsigned long output_count;
+  unsigned long total_count;
+
+  /* This is first entry point, so reset total line. */
+  output_count = 0;
+  total_count  = 0;
+  bgp = bgp_get_default();
+
+
+  struct listnode *node, *nnode;
+  struct peer* one_peer;
+  for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, one_peer))
+  {
+    if (one_peer->status == Established)
+    {
+      output_count = 0;
+      total_count  = 0;
+      table = one_peer->private_rib[AFI_IP][SAFI_UNICAST];
+      rn = bgp_table_top (table);
+      if (rn == NULL)
+      {
+        vty_out (vty, "BGP private table is NULL, peer ipaddr is %s%s", one_peer->host, VTY_NEWLINE);
+        continue;
+      }
+
+      vty_out (vty, "BGP private table, peer ipaddr is %s%s", one_peer->host, VTY_NEWLINE);
+      vty_out (vty, BGP_SHOW_HEADER, VTY_NEWLINE);       
+      /* Start processing of routes. */
+      for (rn = bgp_table_top (table); rn; rn = bgp_route_next (rn)) 
+        if (rn->info != NULL)
+          {
+            display = 0;
+
+            for (ri = rn->info; ri; ri = ri->next)
+              {
+                  total_count++;
+                  route_vty_out (vty, &rn->p, ri, display, SAFI_UNICAST);
+                  display++;
+              }
+              if (display)
+                output_count++;
+          }
+      vty_out (vty, "%sDisplayed  %ld prefixes and %ld routes %s",
+           VTY_NEWLINE, output_count, total_count, VTY_NEWLINE);
+      vty_out(vty, "*********************************%s", VTY_NEWLINE);
+
+    }
+  }
+
+  
+
+  return CMD_SUCCESS;
+}
+
+
+static int
 bgp_show (struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
          enum bgp_show_type type, void *output_arg)
 {
@@ -7026,6 +7182,15 @@ bgp_show (struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
 
   return bgp_show_table (vty, table, &bgp->router_id, type, output_arg);
 }
+
+static int
+bgp_show_public (struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
+         enum bgp_show_type type, void *output_arg)
+{
+  vty_out (vty, "start print public table%s", VTY_NEWLINE);
+  return 1;
+}
+
 
 /* Header of detailed BGP route information */
 static void
@@ -7259,6 +7424,30 @@ DEFUN (show_ip_bgp,
 {
   return bgp_show (vty, NULL, AFI_IP, SAFI_UNICAST, bgp_show_type_normal, NULL);
 }
+
+/* BGP route print out function. */
+DEFUN (show_ip_bgp_public,
+       show_ip_bgp_public_cmd,
+       "show ip bgp public",
+       SHOW_STR
+       IP_STR
+       BGP_STR)
+{
+  return bgp_show_public_table (vty);
+}
+
+
+/* BGP route print out function. */
+DEFUN (show_ip_bgp_private,
+       show_ip_bgp_private_cmd,
+       "show ip bgp private",
+       SHOW_STR
+       IP_STR
+       BGP_STR)
+{
+  return bgp_show_private_table (vty);
+}
+
 
 DEFUN (show_ip_bgp_ipv4,
        show_ip_bgp_ipv4_cmd,
@@ -17896,6 +18085,8 @@ bgp_route_init (void)
 
   /* old style commands */
   install_element (VIEW_NODE, &show_ip_bgp_cmd);
+  install_element (VIEW_NODE, &show_ip_bgp_public_cmd);
+  install_element (VIEW_NODE, &show_ip_bgp_private_cmd);
   install_element (VIEW_NODE, &show_ip_bgp_ipv4_cmd);
   install_element (VIEW_NODE, &show_ip_bgp_route_cmd);
   install_element (VIEW_NODE, &show_ip_bgp_route_pathtype_cmd);
